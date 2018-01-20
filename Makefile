@@ -102,9 +102,9 @@ ifeq ($(TARGET),)
 endif
 export TARGET
 
-FIRMWARE ?= firmware
+FIRMWARE ?= hdmi2usb
 ifeq ($(FIRMWARE),)
-    FIRMWARE = firmware
+    FIRMWARE = hdmi2usb
 endif
 export FIRMWARE
 
@@ -123,7 +123,7 @@ TARGET_BUILD_DIR = build/$(FULL_PLATFORM)_$(TARGET)_$(FULL_CPU)/
 
 GATEWARE_FILEBASE = $(TARGET_BUILD_DIR)/gateware/top
 BIOS_FILE = $(TARGET_BUILD_DIR)/software/bios/bios.bin
-FIRMWARE_FILEBASE = $(TARGET_BUILD_DIR)/software/$(FIRMWARE)/firmware
+FIRMWARE_FILEBASE = $(TARGET_BUILD_DIR)/software/$(FIRMWARE)/firmware  # This is broken. should be linux/micropython/firmware  (but firmware means hdmi2usb/empty).
 IMAGE_FILE = $(TARGET_BUILD_DIR)/image-gateware+bios+$(FIRMWARE).bin
 
 TFTP_IPRANGE ?= 192.168.100
@@ -150,6 +150,7 @@ MAKE_CMD=\
 		--target=$(TARGET) \
 		--cpu-type=$(CPU) \
 		--iprange=$(TFTP_IPRANGE) \
+		--firmware=$(FIRMWARE) \
 		$(MISOC_EXTRA_CMDLINE) \
 		$(LITEX_EXTRA_CMDLINE) \
 		$(MAKE_LITEX_EXTRA_CMDLINE) \
@@ -208,13 +209,13 @@ image-flash-py: image
 .PHONY: image image-load image-flash image-flash-py image-flash-$(PLATFORM) image-load-$(PLATFORM)
 .NOTPARALLEL: image-load image-flash image-flash-py image-flash-$(PLATFORM) image-load-$(PLATFORM)
 
-# Gateware - the stuff which configures the FPGA.
-# --------------------------------------
-GATEWARE_MODULES=litex litedram liteeth litepcie litesata litescope liteusb litevideo litex
-gateware-submodules: $(addsuffix /.git,$(addprefix third_party/,$(GATEWARE_MODULES)))
+LITEX_SUBMODULES=litex litedram liteeth litepcie litesata litescope liteusb litevideo
+litex-submodules: $(addsuffix /.git,$(addprefix third_party/,$(LITEX_SUBMODULES)))
 	@true
 
-gateware: gateware-submodules
+# Gateware - the stuff which configures the FPGA.
+# --------------------------------------
+gateware: litex-submodules
 	mkdir -p $(TARGET_BUILD_DIR)
 ifneq ($(OS),Windows_NT)
 	$(MAKE_CMD) \
@@ -250,7 +251,7 @@ gateware-clean:
 
 # Firmware - the stuff which runs in the soft CPU inside the FPGA.
 # --------------------------------------
-firmware-cmd:
+firmware-cmd: litex-submodules
 	mkdir -p $(TARGET_BUILD_DIR)
 ifneq ($(OS),Windows_NT)
 	$(MAKE_CMD) --no-compile-gateware \
@@ -322,7 +323,11 @@ IN_TFTPD=?=/usr/sbin/in.tftpd
 
 tftp: $(FIRMWARE_FILEBASE).bin
 	mkdir -p $(TFTPD_DIR)
-	cp $(FIRMWARE_FILEBASE).bin $(TFTPD_DIR)/boot.bin
+	@if [ "$(FIRMWARE)" = "linux" ]; then \
+		cp $(TARGET_BUILD_DIR)/software/linux/firmware.bin $(TFTPD_DIR)/boot.bin; \
+	else \
+		cp $(FIRMWARE_FILEBASE).bin $(TFTPD_DIR)/boot.bin; \
+	fi
 
 tftpd_stop:
 	sudo true
@@ -481,7 +486,7 @@ reset: reset-$(PLATFORM)
 clean:
 	rm -f build/cache.mk
 	rm -rf $(TARGET_BUILD_DIR)
-	py3clean . || rm -rf $$(find -name __pycache__)
+	py3clean . 2>/dev/null || rm -rf $$(find -name __pycache__)
 
 dist-clean:
 	rm -rf build

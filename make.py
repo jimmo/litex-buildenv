@@ -10,11 +10,12 @@ from litex.soc.integration.builder import *
 BIOS_SIZE = 0x8000
 
 
-def get_args(parser, platform='opsis', target='hdmi2usb'):
+def get_args(parser, platform='opsis', target='hdmi2usb', firmware='hdmi2usb'):
     parser.add_argument("--platform", action="store", default=os.environ.get('PLATFORM', platform))
     parser.add_argument("--target", action="store", default=os.environ.get('TARGET', target))
     parser.add_argument("--cpu-type", default=os.environ.get('CPU', 'lm32'))
     parser.add_argument("--cpu-variant", default=os.environ.get('CPU_VARIANT', ''))
+    parser.add_argument("--firmware", action="store", default=os.environ.get('FIRMWARE', firmware))
 
     parser.add_argument("--iprange", default="192.168.100")
 
@@ -123,7 +124,8 @@ def main():
         builder = Builder(soc, **buildargs)
         if not args.no_compile_firmware or args.override_firmware:
             builder.add_software_package("uip", "{}/firmware/uip".format(os.getcwd()))
-            builder.add_software_package("firmware", "{}/firmware".format(os.getcwd()))
+            firmware = args.firmware if args.firmware not in ('linux', 'micropython',) else 'empty'
+            builder.add_software_package("firmware", "{}/firmware/{}".format(os.getcwd(), firmware))
         vns = builder.build(**dict(args.build_option))
     else:
         vns = platform.build(soc, build_dir=os.path.join(builddir, "gateware"))
